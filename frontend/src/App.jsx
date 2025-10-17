@@ -12,7 +12,12 @@ function App() {
   const [error, setError] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const API_URL = 'http://localhost:8000';
+  // Configuration from environment variables
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'Deepfake Detection Platform';
+  const APP_SUBTITLE = import.meta.env.VITE_APP_SUBTITLE || 'Advanced AI-Powered Media Authentication';
+  const ENABLE_YOUTUBE = import.meta.env.VITE_ENABLE_YOUTUBE === 'true';
+  const ENABLE_FILE_UPLOAD = import.meta.env.VITE_ENABLE_FILE_UPLOAD === 'true';
 
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files[0];
@@ -115,9 +120,9 @@ function App() {
         <div className="container">
           <div className="logo">
             <Shield size={32} />
-            <h1>Deepfake Detection Platform</h1>
+            <h1>{APP_TITLE}</h1>
           </div>
-          <p className="subtitle">Advanced AI-Powered Media Authentication</p>
+          <p className="subtitle">{APP_SUBTITLE}</p>
         </div>
       </header>
 
@@ -126,33 +131,43 @@ function App() {
         <div className="upload-section">
           <div className="upload-card">
             {/* Mode Tabs */}
-            <div className="mode-tabs">
-              <button 
-                className={`mode-tab ${analysisMode === 'upload' ? 'active' : ''}`}
-                onClick={() => {
-                  setAnalysisMode('upload');
-                  setResults(null);
-                  setError(null);
-                }}
-              >
-                <Upload size={20} />
-                Upload File
-              </button>
-              <button 
-                className={`mode-tab ${analysisMode === 'youtube' ? 'active' : ''}`}
-                onClick={() => {
-                  setAnalysisMode('youtube');
-                  setResults(null);
-                  setError(null);
-                  setFile(null);
-                }}
-              >
-                <FileVideo size={20} />
-                YouTube URL
-              </button>
-            </div>
+            {ENABLE_FILE_UPLOAD && ENABLE_YOUTUBE && (
+              <div className="mode-tabs">
+                <button 
+                  className={`mode-tab ${analysisMode === 'upload' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAnalysisMode('upload');
+                    setResults(null);
+                    setError(null);
+                  }}
+                >
+                  <Upload size={20} />
+                  Upload File
+                </button>
+                <button 
+                  className={`mode-tab ${analysisMode === 'youtube' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAnalysisMode('youtube');
+                    setResults(null);
+                    setError(null);
+                    setFile(null);
+                  }}
+                >
+                  <FileVideo size={20} />
+                  YouTube URL
+                </button>
+              </div>
+            )}
 
-            {analysisMode === 'upload' ? (
+            {(!ENABLE_FILE_UPLOAD || !ENABLE_YOUTUBE) && analysisMode === 'youtube' && !ENABLE_YOUTUBE && (
+              setAnalysisMode('upload')
+            )}
+            
+            {(!ENABLE_FILE_UPLOAD || !ENABLE_YOUTUBE) && analysisMode === 'upload' && !ENABLE_FILE_UPLOAD && (
+              setAnalysisMode('youtube')
+            )}
+
+            {(analysisMode === 'upload' && ENABLE_FILE_UPLOAD) ? (
               <>
                 <div className="upload-icon">
                   {fileType === 'video' ? <FileVideo size={48} /> : <FileImage size={48} />}
@@ -197,7 +212,7 @@ function App() {
                   </div>
                 )}
               </>
-            ) : (
+            ) : (ENABLE_YOUTUBE && (
               <>
                 <div className="upload-icon">
                   <FileVideo size={48} color="#dc2626" />
@@ -241,7 +256,7 @@ function App() {
                   </div>
                 )}
               </>
-            )}
+            ))}
           </div>
         </div>
 

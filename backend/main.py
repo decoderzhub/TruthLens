@@ -19,6 +19,20 @@ from torchvision import transforms
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 import warnings
 warnings.filterwarnings('ignore')
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configuration from environment
+HOST = os.getenv('HOST', '0.0.0.0')
+PORT = int(os.getenv('PORT', '8000'))
+CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000,http://localhost:5173').split(',')
+ML_MODEL_NAME = os.getenv('ML_MODEL_NAME', 'dima806/deepfake_vs_real_image_detection')
+ML_DEVICE = os.getenv('ML_DEVICE', 'auto')
+DEFAULT_SAMPLE_RATE = int(os.getenv('DEFAULT_SAMPLE_RATE', '30'))
+YOUTUBE_DOWNLOAD_DIR = os.getenv('YOUTUBE_DOWNLOAD_DIR', '/tmp')
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 
 try:
     import yt_dlp
@@ -30,14 +44,14 @@ except ImportError:
 
 class YouTubeURLRequest(BaseModel):
     url: str
-    sample_rate: Optional[int] = 30
+    sample_rate: Optional[int] = None  # Will use DEFAULT_SAMPLE_RATE if not provided
 
 app = FastAPI(title="Deepfake Detection API")
 
-# CORS middleware
+# CORS middleware - configured from environment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,14 +74,19 @@ def load_ml_model():
         try:
             print("🤖 Loading AI model... This may take a minute on first run...")
             
-            # Determine device
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Determine device from config or auto-detect
+            if ML_DEVICE == 'auto':
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+            else:
+                device = ML_DEVICE
+            
             ml_model_cache["device"] = device
             print(f"   Using device: {device}")
             
-            # Load pre-trained deepfake detection model
-            model_name = "dima806/deepfake_vs_real_image_detection"
+            # Load pre-trained deepfake detection model from config
+            model_name = ML_MODEL_NAME
             
+            print(f"   Loading model: {model_name}")
             print("   Downloading model weights (first time only)...")
             ml_model_cache["processor"] = AutoImageProcessor.from_pretrained(model_name)
             ml_model_cache["model"] = AutoModelForImageClassification.from_pretrained(model_name)
@@ -589,11 +608,14 @@ async def analyze_image(file: UploadFile = File(...)):
 
 
 @app.post("/analyze/video")
-async def analyze_video(file: UploadFile = File(...), sample_rate: int = 30):
+async def analyze_video(file: UploadFile = File(...), sample_rate: int = None):
     """Analyze a video for deepfake indicators"""
     
     if not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="File must be a video")
+    
+    # Use provided sample_rate or default from config
+    sample_rate = sample_rate if sample_rate else DEFAULT_SAMPLE_RATE
     
     # Save video to temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
@@ -638,10 +660,13 @@ async def analyze_youtube(request: YouTubeURLRequest):
     video_path = None
     
     try:
+        # Use sample_rate from request or default from config
+        sample_rate = request.sample_rate if request.sample_rate else DEFAULT_SAMPLE_RATE
+        
         # Configure yt-dlp options
         ydl_opts = {
             'format': 'best[ext=mp4]/best',  # Prefer mp4
-            'outtmpl': '/tmp/youtube_video_%(id)s.%(ext)s',
+            'outtmpl': f'{YOUTUBE_DOWNLOAD_DIR}/youtube_video_%(id)s.%(ext)s',
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
@@ -664,7 +689,7 @@ async def analyze_youtube(request: YouTubeURLRequest):
             executor,
             analyzer.analyze_video,
             video_path,
-            request.sample_rate
+            sample_rate
         )
         
         # Add YouTube metadata
